@@ -6,14 +6,19 @@ import math
 import time
 import multiprocessing as mp
 import OCR as ocr
+import gc
+import psutil
 
-#TODO: try py-spy and py-instrument
+## YIPPIEEEEEEEEEEE
+## PROCESSEC=S_COUNT = 6 SECONDS_INTERVAL = 2 
+# [Done] exited with code=0 in 409.744 seconds
+
 
 
 # constants
-PROCESSES_COUNT = 3
+PROCESSES_COUNT = 6
 # should be 1~5
-SECONDS_INTERVAL = 300
+SECONDS_INTERVAL = 2
 FILE_LOCATION = 'videos/HortusdeEscapismo/HortusdeEscapismo.mkv'
 
 
@@ -94,7 +99,8 @@ def processVideoFrameRange(startFrame, endFrame):
         try:
             gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
             height, width, channels = frame.shape
-            frame = frame[int(height*0.86):height, 0:width]
+            #frame = frame[int(height*0.86):height, 0:width]
+            frame = frame[int(height*0.85):height, int(width*0.18):int(width*0.9)]
             myOCR.infer(frame)
         except Exception as e:
             print("I am", os.getpid())
@@ -104,8 +110,6 @@ def processVideoFrameRange(startFrame, endFrame):
     print("Video Ended")
     #pr.disable()
     #pr.print_stats(sort='cumtime')
-
-
 
 def processVideoSingleProcess():
     # get video
@@ -122,10 +126,10 @@ def processVideoSingleProcess():
     myOCR = ocr.OCR()
 
     for frame in frames:
-        t0 = time.perf_counter()
+        #t0 = time.perf_counter()
         cap.set(cv.CAP_PROP_POS_FRAMES, frame)
-        t1 = time.perf_counter()
-        dt = t1 - t0
+        #t1 = time.perf_counter()
+        #dt = t1 - t0
         #print(f"jump to {frame:3d}: {dt:.3f} s", "*" * int(round(dt/0.1)))
 
         # read the next frame
@@ -137,16 +141,24 @@ def processVideoSingleProcess():
         # if it becomes more complex
         gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
         height, width, channels = frame.shape
-        frame = frame[int(height*0.86):height, 0:width]
-
+        frame = frame[int(height*0.85):height, int(width*0.15):int(width*0.9)]
+        #frame = frame[int(height*0.85):height, int(width*0.18):int(width*0.9)]
+        
         myOCR.infer(frame)
 
     cap.release()
     print("Video Ended")
     
 
+def system_summary():
+    print("Logical Cores:",psutil.cpu_count(logical=True))
+    print("Physical Cores:",psutil.cpu_count(logical=False))
+    print("RAM Memory (GB):", int(psutil.virtual_memory().total / 1048576))
+
+
 if __name__ == '__main__':
-    #processesStart()
+    #system_summary()
+    processesStart()
     #cProfile.run("processesStart()")
-    processVideoSingleProcess()
+    #processVideoSingleProcess()
     #cProfile.run("processVideoSingleProcess()")
