@@ -1,20 +1,27 @@
 import numpy as np
 import cv2 as cv
 import os
-import cProfile
+#import cProfile
 import math
 import time
 import multiprocessing as mp
+import OCR as ocr
+
+#TODO: try py-spy and py-instrument
+
 
 # constants
 PROCESSES_COUNT = 3
 # should be 1~5
-SECONDS_INTERVAL = 200
-FILE_LOCATION = 'videos/HortusdeEscapismo.mkv'
+SECONDS_INTERVAL = 300
+FILE_LOCATION = 'videos/HortusdeEscapismo/HortusdeEscapismo.mkv'
 
 
 # get video
-cap = cv.VideoCapture(FILE_LOCATION)
+try:
+    cap = cv.VideoCapture(FILE_LOCATION)
+except Exception as e:
+    print("Exception when trying to Read Video:", e)
 
 # extract relevant parameters
 frame_count = cap.get(cv.CAP_PROP_FRAME_COUNT)
@@ -34,7 +41,8 @@ if(partitions[-1] < frame_count):
 
 print("Video Total Frames:", frame_count)
 print("Video Frame Rate:", fps)
-print("Number of iterations:", math.floor(frame_count/frame_offset))
+print("Skip Seconds Interval:", SECONDS_INTERVAL)
+print("Number of iterations (single process):", math.floor(frame_count/frame_offset))
 print("Partition Step:", math.floor(frame_count / PROCESSES_COUNT))
 print("Partitions:", partitions)
 print("Start End Pairs:", pairs_start_end)
@@ -64,30 +72,55 @@ def processesStart():
 def processVideoFrameRange(startFrame, endFrame):
     print("I am Process: ", os.getpid())
     print("I am responsible for:[%d, %d]" % (startFrame, endFrame))
+    #pr = cProfile.Profile()
+    #pr.enable()
 
-    cap = cv.VideoCapture(FILE_LOCATION)
+    try:
+        cap = cv.VideoCapture(FILE_LOCATION)
+    except Exception as e:
+        print("Exception when trying to Read Video:", e)
+
 
     frames = np.arange(start = startFrame, stop = endFrame, step = frame_offset, dtype=int)
-    print("My frames:", frames)
+    
+    myOCR = ocr.OCR()
 
     for frame in frames:
         cap.set(cv.CAP_PROP_POS_FRAMES, frame)
         ret, frame = cap.read()
+        
         #when using 3 processes encountering 
         #!_src.empty() in function 'cv::cvtColor'
-        
         try:
             gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
+            height, width, channels = frame.shape
+            frame = frame[int(height*0.86):height, 0:width]
+            myOCR.infer(frame)
         except Exception as e:
             print("I am", os.getpid())
             print("I am throwing an exception:", e)
 
     cap.release()
     print("Video Ended")
+    #pr.disable()
+    #pr.print_stats(sort='cumtime')
 
 
 
 def processVideoSingleProcess():
+    # get video
+    try:
+        cap = cv.VideoCapture(FILE_LOCATION)
+    except Exception as e:
+        print("Exception when trying to Read Video:", e)
+    
+
+    frame_count = cap.get(cv.CAP_PROP_FRAME_COUNT)
+    fps = cap.get(cv.CAP_PROP_FPS)
+    frame_offset = SECONDS_INTERVAL * fps
+    frames = np.arange(start = 1, stop = frame_count, step = frame_offset, dtype=int)
+    myOCR = ocr.OCR()
+
     for frame in frames:
         t0 = time.perf_counter()
         cap.set(cv.CAP_PROP_POS_FRAMES, frame)
@@ -103,12 +136,17 @@ def processVideoSingleProcess():
         # couple into processFrame() function
         # if it becomes more complex
         gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
+        height, width, channels = frame.shape
+        frame = frame[int(height*0.86):height, 0:width]
+
+        myOCR.infer(frame)
 
     cap.release()
     print("Video Ended")
     
 
 if __name__ == '__main__':
-    processesStart()
+    #processesStart()
     #cProfile.run("processesStart()")
-    #processVideoSingleProcess()
+    processVideoSingleProcess()
+    #cProfile.run("processVideoSingleProcess()")
