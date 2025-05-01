@@ -5,160 +5,148 @@ import os
 import math
 import time
 import multiprocessing as mp
-import OCR as ocr
-import gc
+import OCR.OCR as ocr
 import psutil
+from Video.Video import Video
+import scipy.integrate._quadrature
 
-## YIPPIEEEEEEEEEEE
-## PROCESSEC=S_COUNT = 6 SECONDS_INTERVAL = 2 
-# [Done] exited with code=0 in 409.744 seconds
+'''
+NOTE:
+THIS CLASS WILL POSSIBLY BE ADAPTED TO simply function as
+vd = VideoReader()
+vd.processVideo(Video, OCR)
 
+Currently this refactoring will take  time
+and may unnecessarily complicate strucuture
+'''
+# constant for the distance in seconds between frames
+SECONDS_INTERVAL = 300
 
+# Consider creating a Video class.
+class VideoReader:
+    r''' A class that reads the subtitles from a Video
 
-# constants
-PROCESSES_COUNT = 6
-# should be 1~5
-SECONDS_INTERVAL = 2
-FILE_LOCATION = 'videos/HortusdeEscapismo/HortusdeEscapismo.mkv'
-
-
-# get video
-try:
-    cap = cv.VideoCapture(FILE_LOCATION)
-except Exception as e:
-    print("Exception when trying to Read Video:", e)
-
-# extract relevant parameters
-frame_count = cap.get(cv.CAP_PROP_FRAME_COUNT)
-fps = cap.get(cv.CAP_PROP_FPS)
-frame_offset = SECONDS_INTERVAL * fps
-partitions = np.arange(start = 1,
-                        stop = frame_count,
-                        step = math.floor(frame_count / PROCESSES_COUNT),
-                        dtype=int
-)
-# create pairs of starting and ending frames
-pairs_start_end = []
-for i in range(partitions.size - 1):
-    pairs_start_end.append([partitions[i], partitions[i + 1]])
-if(partitions[-1] < frame_count):
-    pairs_start_end.append([partitions[-1], int(frame_count)])
-
-print("Video Total Frames:", frame_count)
-print("Video Frame Rate:", fps)
-print("Skip Seconds Interval:", SECONDS_INTERVAL)
-print("Number of iterations (single process):", math.floor(frame_count/frame_offset))
-print("Partition Step:", math.floor(frame_count / PROCESSES_COUNT))
-print("Partitions:", partitions)
-print("Start End Pairs:", pairs_start_end)
-
-frames = np.arange(start = 1, stop = frame_count, step = frame_offset, dtype=int)
-
-def processesStart():
-
-    # store Futures of the processes to wait for them to conclude
-    futures = []
-
-    # consider initializing with videoCapture as shared variables
-    pool = mp.Pool(processes = PROCESSES_COUNT)
-
-    # loop over pairs and start processes
-    for pair in pairs_start_end:
-        f = pool.apply_async(processVideoFrameRange, args=(pair[0], pair[1]))
-        futures.append(f)
-
-    for f in futures:
-        f.get()
+    Attributes
+    -------------
+    file_path: string
+        path to the video
+    Video: Video
+        A Video instance
     
-    cap.release()
-    print("Processes Complete")
+    '''
 
-# processes the frames in the range
-def processVideoFrameRange(startFrame, endFrame):
-    print("I am Process: ", os.getpid())
-    print("I am responsible for:[%d, %d]" % (startFrame, endFrame))
-    #pr = cProfile.Profile()
-    #pr.enable()
-
-    try:
-        cap = cv.VideoCapture(FILE_LOCATION)
-    except Exception as e:
-        print("Exception when trying to Read Video:", e)
+    def __init__(self, file_path):
+        r'''Create VideoReader instance
 
 
-    frames = np.arange(start = startFrame, stop = endFrame, step = frame_offset, dtype=int)
-    
-    myOCR = ocr.OCR()
+        Parameters
+        ----------
+        file_path: string
+            path to the file to read from.
 
-    for frame in frames:
-        cap.set(cv.CAP_PROP_POS_FRAMES, frame)
-        ret, frame = cap.read()
+        Returns
+        -------
+        videoReader: VideoReader
+            instance of VideoReader
+
+        Raises
+        ------
+        File_Not_Found 
+            when file cannot be located at file_path 
+        File_Not_Video
+            when the file located at file_path is not a Video
+        '''
+        self.file_path = file_path
+        self.Video = Video(file_path)
+
+
+    def processVideo(self, multiprocessing = False):
+        r'''
         
-        #when using 3 processes encountering 
-        #!_src.empty() in function 'cv::cvtColor'
+        Paramaters
+        ----------
+        multiprocessing: bool
+            boolean whether to process Video using multiple processes
+        
+        Returns
+        -------
+        TODO: Define/Pick a type/class that stores the subtitles
+        '''
+        if multiprocessing == True:
+            print("processVideo:       Multiprocessing")
+            # Forgive the naming inconsistency, this used to be a constant 
+            # Use half of physical core count.
+            # TODO: Research into process_count optimizations or sth
+            processes_count = psutil.cpu_count(logical=False) // 2
+
+            # store Futures of the processes to wait for them to conclude
+            futures = []
+
+            # consider initializing with videoCapture as sharedMemory
+            pool = mp.Pool(processes = processes_count)
+
+            # loop over pairs and start processes
+            pairs = self.Video.getPartitions(partition_count=processes_count)
+            for pair in pairs:
+                f = pool.apply_async(self.processVideoFrameRange, args=(True, pair[0], pair[1]))
+                futures.append(f)
+
+            for f in futures:
+                f.get()
+            
+            print("Processes Complete")
+
+        else:
+            print("processVideo:       Not Multiprocessing")
+            self.processVideoFrameRange(multiprocessing = multiprocessing, startFrame = 0, endFrame= self.Video.frame_count)
+        
+
+    def processVideoFrameRange(self, multiprocessing = False, startFrame = 0, endFrame = 1):
+        if (multiprocessing == True):
+            print("I am Process: ", os.getpid())
+            print("I am responsible for:[%d, %d]" % (startFrame, endFrame))
+
         try:
+            cap = cv.VideoCapture(self.file_path)
+        except Exception as e:
+            print("Exception when trying to Read Video:", e)
+            return
+
+        frame_offset = SECONDS_INTERVAL * self.Video.fps
+        frames = np.arange(start = startFrame, stop = endFrame, step = frame_offset, dtype=int)
+        print("My frames are: ", frames)
+        
+        myOCR = ocr.OCR()
+
+        for frame in frames:
+            cap.set(cv.CAP_PROP_POS_FRAMES, frame)
+            ret, frame = cap.read()
+            
+            #when using 3 processes encountering 
+            #!_src.empty() in function 'cv::cvtColor'
+            #try:
             gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
             height, width, channels = frame.shape
             #frame = frame[int(height*0.86):height, 0:width]
             frame = frame[int(height*0.85):height, int(width*0.18):int(width*0.9)]
-            myOCR.infer(frame)
-        except Exception as e:
-            print("I am", os.getpid())
-            print("I am throwing an exception:", e)
+            print(myOCR.infer(frame))
+            #except Exception as e:
+            #    print("I am", os.getpid())
+            #    print("I am throwing an exception:", e)
 
-    cap.release()
-    print("Video Ended")
-    #pr.disable()
-    #pr.print_stats(sort='cumtime')
-
-def processVideoSingleProcess():
-    # get video
-    try:
-        cap = cv.VideoCapture(FILE_LOCATION)
-    except Exception as e:
-        print("Exception when trying to Read Video:", e)
-    
-
-    frame_count = cap.get(cv.CAP_PROP_FRAME_COUNT)
-    fps = cap.get(cv.CAP_PROP_FPS)
-    frame_offset = SECONDS_INTERVAL * fps
-    frames = np.arange(start = 1, stop = frame_count, step = frame_offset, dtype=int)
-    myOCR = ocr.OCR()
-
-    for frame in frames:
-        #t0 = time.perf_counter()
-        cap.set(cv.CAP_PROP_POS_FRAMES, frame)
-        #t1 = time.perf_counter()
-        #dt = t1 - t0
-        #print(f"jump to {frame:3d}: {dt:.3f} s", "*" * int(round(dt/0.1)))
-
-        # read the next frame
-        # if frame is read correctly ret is True
-        ret, frame = cap.read()
-
-        # operations on frame here
-        # couple into processFrame() function
-        # if it becomes more complex
-        gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
-        height, width, channels = frame.shape
-        frame = frame[int(height*0.85):height, int(width*0.15):int(width*0.9)]
-        #frame = frame[int(height*0.85):height, int(width*0.18):int(width*0.9)]
-        
-        myOCR.infer(frame)
-
-    cap.release()
-    print("Video Ended")
-    
-
-def system_summary():
-    print("Logical Cores:",psutil.cpu_count(logical=True))
-    print("Physical Cores:",psutil.cpu_count(logical=False))
-    print("RAM Memory (GB):", int(psutil.virtual_memory().total / 1048576))
-
+        cap.release()
+        print("Video Ended")
+        #pr.disable()
+        #pr.print_stats(sort='cumtime')
 
 if __name__ == '__main__':
     #system_summary()
-    processesStart()
+    file_loc = 'videos/HortusdeEscapismo/HortusdeEscapismo.mkv'
+    multiprocessing = True
+
+    vd = VideoReader(file_loc)
+    vd.processVideo(multiprocessing=multiprocessing)
+
     #cProfile.run("processesStart()")
     #processVideoSingleProcess()
     #cProfile.run("processVideoSingleProcess()")
