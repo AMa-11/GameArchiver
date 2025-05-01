@@ -28,6 +28,8 @@ class OCR:
                 for line in res:
                     text = text + " " + line[1][0]
                 #print(text)
+                return text
+        return 'Nothing Found'
 
 if __name__ == "__main__":
     testOCR = OCR()
