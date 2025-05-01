@@ -14,7 +14,7 @@ import psutil
 # [Done] exited with code=0 in 409.744 seconds
 
 # constants
-PROCESSES_COUNT = 6
+PROCESSES_COUNT = 2
 # should be 1~5
 SECONDS_INTERVAL = 200
 FILE_LOCATION = 'videos/HortusdeEscapismo/HortusdeEscapismo.mkv'
@@ -30,17 +30,15 @@ except Exception as e:
 frame_count = cap.get(cv.CAP_PROP_FRAME_COUNT)
 fps = cap.get(cv.CAP_PROP_FPS)
 frame_offset = SECONDS_INTERVAL * fps
-partitions = np.arange(start = 1,
+partitions = np.arange(start = 0,
                         stop = frame_count,
-                        step = math.floor(frame_count / PROCESSES_COUNT),
+                        step = math.floor(frame_count / PROCESSES_COUNT)-1,
                         dtype=int
 )
 # create pairs of starting and ending frames
 pairs_start_end = []
 for i in range(partitions.size - 1):
     pairs_start_end.append([partitions[i], partitions[i + 1]])
-if(partitions[-1] < frame_count):
-    pairs_start_end.append([partitions[-1], int(frame_count)])
 
 print("Video Total Frames:", frame_count)
 print("Video Frame Rate:", fps)
@@ -67,6 +65,8 @@ def processesStart():
 
     for f in futures:
         f.get()
+    
+    pool.close()
     
     cap.release()
     print("Processes Complete")

@@ -1,13 +1,12 @@
 import numpy as np
 import cv2 as cv
 import os
-#import cProfile
-import math
-import time
 import multiprocessing as mp
 import OCR.OCR as ocr
 import psutil
 from Video.Video import Video
+
+# DOC STYLE REFERENCE
 import scipy.integrate._quadrature
 
 '''
@@ -20,7 +19,7 @@ Currently this refactoring will take  time
 and may unnecessarily complicate strucuture
 '''
 # constant for the distance in seconds between frames
-SECONDS_INTERVAL = 300
+SECONDS_INTERVAL = 150
 
 # Consider creating a Video class.
 class VideoReader:
@@ -75,9 +74,9 @@ class VideoReader:
         if multiprocessing == True:
             print("processVideo:       Multiprocessing")
             # Forgive the naming inconsistency, this used to be a constant 
-            # Use half of physical core count.
-            # TODO: Research into process_count optimizations or sth
-            processes_count = psutil.cpu_count(logical=False) // 2
+            # TODO: Research into best process_count value or sth
+            # max in case device has only one physical core.
+            processes_count = max(1, psutil.cpu_count(logical=False) - 1)
 
             # store Futures of the processes to wait for them to conclude
             futures = []
@@ -94,6 +93,8 @@ class VideoReader:
             for f in futures:
                 f.get()
             
+            # HOOOOW
+            pool.close()
             print("Processes Complete")
 
         else:
@@ -145,7 +146,8 @@ if __name__ == '__main__':
     multiprocessing = True
 
     vd = VideoReader(file_loc)
-    vd.processVideo(multiprocessing=multiprocessing)
+    
+    vd.processVideo(multiprocessing=multiprocessing)    
 
     #cProfile.run("processesStart()")
     #processVideoSingleProcess()
